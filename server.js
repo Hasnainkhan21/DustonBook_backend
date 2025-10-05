@@ -6,6 +6,7 @@ const connectDB = require('./Configurations/db');
 const cors = require('cors');
 const morgan = require('morgan');
 const authRoutes = require('./Routers/authRoutes');
+const bookRoutes = require("./Routers/bookRoutes");
 
 
 connectDB();
@@ -15,6 +16,7 @@ app.use(morgan("dev"));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/books', bookRoutes);
 
 app.get('/', (req, res) => {
     res.send('Hello Books!');
