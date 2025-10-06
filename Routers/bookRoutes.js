@@ -1,17 +1,13 @@
 const express = require("express");
-const {
-  createBook,
-  getBooks,
-  editBook,
-  removeBook
-} = require("../Controllers/bookController");
-const  protect  = require("../middlewares/authMiddleware");
 const router = express.Router();
+const upload = require("../middlewares/multer");
+const { addBook, getBooks, getBookById, updateBook, deleteBook } = require("../Controllers/bookController");
+const  protect  = require("../middlewares/authMiddleware");
 
-
-router.post("/create",protect, createBook);     // Add book
-router.get("/get", getBooks);                 // Get all books (public)
-router.put("/edit/:id",editBook);     // Update book
-router.delete("/remove/:id",removeBook); // Delete book
+router.post("/add", protect,upload.single("coverImage"), addBook);
+router.get("/get", getBooks);
+router.get("/get/:id", getBookById);
+router.put("/update/:id", protect,upload.single("coverImage"), updateBook);
+router.delete("/delete/:id", protect, deleteBook);
 
 module.exports = router;
