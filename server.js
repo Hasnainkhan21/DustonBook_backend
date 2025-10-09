@@ -8,6 +8,7 @@ const morgan = require('morgan');
 const authRoutes = require('./Routers/authRoutes');
 const bookRoutes = require("./Routers/bookRoutes");
 const cartRoutes = require("./Routers/cartRoutes");
+const orderRoutes = require("./Routers/orderRoutes");
 
 
 connectDB();
@@ -19,6 +20,7 @@ app.use(morgan("dev"));
 app.use('/api/auth', authRoutes);
 app.use('/api/books', bookRoutes);
 app.use("/api/cart", cartRoutes);
+app.use("/api/orders", orderRoutes);
 
 
 const port = process.env.PORT;
