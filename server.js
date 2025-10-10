@@ -5,12 +5,14 @@ const app = express();
 const connectDB = require('./Configurations/db');
 const cors = require('cors');
 const morgan = require('morgan');
+
+// Import Routes
 const authRoutes = require('./Routers/authRoutes');
 const bookRoutes = require("./Routers/bookRoutes");
 const cartRoutes = require("./Routers/cartRoutes");
 const orderRoutes = require("./Routers/orderRoutes");
 const blogRoutes = require("./Routers/blogRoutes");
-
+const analyticsRoutes = require("./Routers/analyticsRoutes");
 
 connectDB();
 app.use(cors());
@@ -23,6 +25,7 @@ app.use('/api/books', bookRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/blogs", blogRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 const port = process.env.PORT;
 app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
