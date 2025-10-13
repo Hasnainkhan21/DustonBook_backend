@@ -4,9 +4,10 @@ const jwt = require("jsonwebtoken");
 // Register a new user
 exports.register = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { name, email, password } = req.body;
 
-    if (!username || !email || !password) {
+    
+    if (!name || !email || !password) {
       return res.status(400).json({ message: "Please enter all fields" });
     }
 
@@ -15,16 +16,18 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const newUser = await User.create({ username, email, password });
+    const newUser = await User.create({ name, email, password });
     res.status(201).json({ message: "User registered successfully", user: newUser });
   } catch (error) {
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors).map((val) => val.message);
-      return res.status(400).json({ errors: messages });
-    }
-    res.status(500).json({ message: error.message });
+  console.error("Register error:", error);
+  if (error.name === "ValidationError") {
+    const messages = Object.values(error.errors).map((val) => val.message);
+    return res.status(400).json({ errors: messages });
   }
-};
+  res.status(500).json({ message: error.message });
+}
+}
+
 
 // Login User
 exports.login = async (req, res) => {
@@ -48,8 +51,14 @@ exports.login = async (req, res) => {
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
+    res.cookie("token", token, {
+    httpOnly: true,   
+    secure: false,     
+    sameSite: "strict",
+    maxAge: 60 * 60 * 1000, // 1 hour
+  });
 
-    res.status(200).json({ message: "Login successful", token });
+    res.status(200).json({ message: "Login successful"});
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
