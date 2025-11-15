@@ -63,3 +63,21 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+exports.getMe = async (req, res) => {
+    try {
+        const token = req.cookies.token;
+        if (!token) return res.status(401).json({ message: 'Not authenticated' });
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id).select('name email');
+        res.json(user);
+    } catch (err) {
+        res.status(401).json({ message: 'Invalid token' });
+    }
+};
+
+exports.logout = (req, res) => {
+    res.clearCookie('token', { httpOnly: true });
+    res.json({ message: 'Logged out successfully' });
+};

@@ -8,8 +8,8 @@ const authorize = require("../middlewares/authorize");
 
 router.post("/add", protect, upload.single("image"), createPost); // later: add admin middleware
 router.get("/all", getAllPosts);
-router.put("/like/:id", protect, likePost);
-router.delete("/:id", protect,authorize("admin"), deletePost);
-router.put("/:id", protect, updatePost);
+router.put("/like/:id",likePost);
+router.delete("/delete/:id", protect, deletePost);  //authorize("admin"),
+router.put("/update/:id", protect, updatePost);
 
 module.exports = router;

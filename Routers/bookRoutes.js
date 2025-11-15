@@ -7,7 +7,7 @@ const  protect  = require("../middlewares/authMiddleware");
 router.post("/add", protect,upload.single("coverImage"), addBook);
 router.get("/get", getBooks);
 router.get("/get/:id", getBookById);
-router.put("/update/:id", protect,upload.single("coverImage"), updateBook);
-router.delete("/delete/:id", protect, deleteBook);
+router.put("/update/:id",upload.single("coverImage"), updateBook);
+router.delete("/delete/:id",deleteBook);
 
 module.exports = router;

@@ -22,6 +22,7 @@ exports.createPost= async (req, res) => {
       publicId = result.public_id;
     }
 
+
     // Create new blog post
     const blog = await BlogPost.create({
       title,
@@ -53,21 +54,21 @@ exports.getAllPosts = async (req, res) => {
 
 // Like a post
 exports.likePost= async (req, res) => {
-  try {
-    const post = await BlogPost.findById(req.params.id);
-    if (!post) return res.status(404).json({ message: "Post not found" });
+try {
+    const blog = await BlogPost.findById(req.params.id);
+    if (!blog) return res.status(404).json({ message: "Blog not found" });
 
-    const alreadyLiked = post.likes.includes(req.user._id);
-    if (alreadyLiked) {
-      post.likes.pull(req.user._id);
-    } else {
-      post.likes.push(req.user._id);
-    }
+    // Make sure blog.likes exists
+    if (typeof blog.likes !== "number") blog.likes = 0;
 
-    await post.save();
-    res.json(post);
+    blog.likes += 1;
+
+    await blog.save(); // this can throw if schema or DB has issues
+
+    res.status(200).json(blog);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Error in likePost:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -84,11 +85,41 @@ exports.deletePost = async (req, res) => {
 
 //update post by id
 exports.updatePost = async (req, res) => {
-    try{
-        const post = await BlogPost.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if(!post) return res.status(404).json({ message: "Post not found" });
+    try {
+
+        let updateData = { ...req.body };
+
+        // Convert tags string to array
+        if (updateData.tags) {
+            updateData.tags = updateData.tags.split(",").map(t => t.trim());
+        }
+
+        // If a new image is uploaded
+        if (req.file) {
+            updateData.image = req.file.filename;
+        }
+
+        // Remove empty/undefined fields
+        Object.keys(updateData).forEach((key) => {
+            if (updateData[key] === "" || updateData[key] === undefined) {
+                delete updateData[key];
+            }
+        });
+
+        const post = await BlogPost.findByIdAndUpdate(
+            req.params.id,
+            updateData,
+            { new: true }
+        );
+
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
         res.json(post);
-    }catch(error){
+
+    } catch (error) {
         res.status(500).json({ message: error.message });
     }
-}
+};
+

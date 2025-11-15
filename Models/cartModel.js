@@ -1,22 +1,24 @@
-const mongoose = require("mongoose");
-const Book = require("./bookModel");
+  const mongoose = require("mongoose");
+  const Book = require("./bookModel");
 
-const cartItemSchema = new mongoose.Schema({
-  book: { type: mongoose.Schema.Types.ObjectId, ref: "Book", required: true },
-  quantity: { type: Number, required: true, min: 1, default: 1 },
-});
+  const cartItemSchema = new mongoose.Schema({
+    book: { type: mongoose.Schema.Types.ObjectId, ref: "Book", required: true},
+    quantity: { type: Number, required: true, min: 1, default: 1 },
+  });
 
-const cartSchema = new mongoose.Schema(
-  {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    items: [cartItemSchema],
-  },
-  { timestamps: true }
-);
+  const cartSchema = new mongoose.Schema(
+    {
+      user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+      items: [cartItemSchema],
+    },
+    { timestamps: true }
+  );
 
 
-// Add item to cart
-cartSchema.methods.addItem = async function (bookId, quantity) {
+  // Add item to cart
+ cartSchema.methods.addItem = async function (bookId, quantity = 1) {
+  quantity = Number(quantity) || 1;
+
   const existingItem = this.items.find(
     (item) => item.book.toString() === bookId.toString()
   );
@@ -31,19 +33,20 @@ cartSchema.methods.addItem = async function (bookId, quantity) {
   return this;
 };
 
-// Remove item from cart
-cartSchema.methods.removeItem = async function (bookId) {
-  this.items = this.items.filter(
-    (item) => item.book.toString() !== bookId.toString()
-  );
-  await this.save();
-  return this;
-};
 
-// Clear all items
-cartSchema.methods.clearCart = async function () {
-  this.items = [];
-  await this.save();
-};
+  // Remove item from cart
+  cartSchema.methods.removeItem = async function (bookId) {
+    this.items = this.items.filter(
+      (item) => item.book.toString() !== bookId.toString()
+    );
+    await this.save();
+    return this;
+  };
 
-module.exports = mongoose.model("Cart", cartSchema);
+  // Clear all items
+  cartSchema.methods.clearCart = async function () {
+    this.items = [];
+    await this.save();
+  };
+
+  module.exports = mongoose.model("Cart", cartSchema);

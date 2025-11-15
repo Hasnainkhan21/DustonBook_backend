@@ -6,6 +6,7 @@ const addBook = async (req, res) => {
   const { title, author, price, stock, category, description } = req.body;
   const coverImage = req.file ? req.file.path : null;
   const publicId = req.file ? req.file.filename : null;
+
   if (!title || !author || !price || !stock) {
     return res.status(400).json({ message: "Title, author, price, and stock are required" });
   }
@@ -20,7 +21,7 @@ const addBook = async (req, res) => {
 // Get all books
 const getBooks = async (req, res) => {
   const books = await Book.find();
-  res.json(books);
+  res.json({books});
 };
 
 // Get single book
