@@ -4,9 +4,9 @@ const { placeOrder, getUserOrders, getAllOrders, updateOrderStatus } = require("
 
 const router = express.Router();
 
-router.post("/", protect, placeOrder);
-router.get("/userOrder", protect, getUserOrders);
+router.post("/place", protect, placeOrder);
+router.get("/my", protect, getUserOrders);
 router.get("/all", protect, getAllOrders);
-router.put("/:id", protect, updateOrderStatus);
+router.put("/update/:id", protect, updateOrderStatus);
 
 module.exports = router;
