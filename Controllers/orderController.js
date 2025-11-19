@@ -26,6 +26,7 @@ const placeOrder = async (req, res) => {
     });
 
     await order.save();
+    io.emit("newOrder", order); // Fixed: was savedOrder
 
     await Cart.deleteOne({ user: req.user._id });
 
@@ -51,8 +52,39 @@ const getAllOrders = async (req, res) => {
 // Admin: update order status
 const updateOrderStatus = async (req, res) => {
   const { status } = req.body;
-  const order = await Order.findByIdAndUpdate(req.params.id, { status }, { new: true });
+  const order = await Order.findByIdAndUpdate(
+    req.params.id,
+    { status },
+    { new: true }
+  ).populate("items.book user");
+
+  // 🔥 Emit event for real-time update
+  io.emit("orderStatusUpdated", order);
+
   res.json(order);
 };
 
-module.exports = { placeOrder, getUserOrders, getAllOrders, updateOrderStatus };
+
+//delete order
+const deleteOrder = async (req, res) => {
+  try {
+    const order = await Order.findByIdAndDelete(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+    res.json({ message: "Order deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+//delete all orders - for testing purposes
+const deleteAllOrders = async (req, res) => {
+  try{
+    await Order.deleteMany({});
+    res.json({ message: "All orders deleted successfully" });
+  }catch(err){
+    res.status(500).json({ message: err.message });
+  }
+}
+module.exports = { placeOrder, getUserOrders, getAllOrders, updateOrderStatus, deleteOrder, deleteAllOrders };
