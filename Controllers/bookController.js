@@ -20,9 +20,29 @@ const addBook = async (req, res) => {
 
 // Get all books
 const getBooks = async (req, res) => {
-  const books = await Book.find();
-  res.json({books});
+  try {
+    const { search, category } = req.query;
+
+    let query = {};
+
+    // Search filter
+    if (search) {
+      query.title = { $regex: search, $options: "i" }; // case-insensitive search
+    }
+
+    // Category filter
+    if (category && category !== "all") {
+      query.category = category;
+    }
+
+    const books = await Book.find(query);
+    res.json({ books });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
+
+
 
 // Get single book
 const getBookById = async (req, res) => {
