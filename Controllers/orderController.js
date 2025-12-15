@@ -1,40 +1,87 @@
-  const Order = require("../Models/orderModel");
-  const Cart = require("../Models/cartModel");
+const mongoose = require("mongoose");
+const Cart = require("../Models/cartModel");
+const Order = require("../Models/orderModel");
+const Book = require('../Models/bookModel');
 
-  // Place order (convert cart → order)
-  const placeOrder = async (req, res) => {
-    try {
-      const { shippingDetails } = req.body;
+const placeOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-      if (!shippingDetails)
-        return res.status(400).json({ message: "Shipping details are required" });
+  try {
+    const { shippingDetails } = req.body;
 
-      const cart = await Cart.findOne({ user: req.user._id }).populate("items.book");
-      if (!cart || cart.items.length === 0)
-        return res.status(400).json({ message: "Cart is empty" });
+    if (!shippingDetails)
+      return res.status(400).json({ message: "Shipping details are required" });
 
-      const totalAmount = cart.items.reduce(
-        (sum, item) => sum + item.book.price * item.quantity,
-        0
-      );
+    const cart = await Cart.findOne({ user: req.user._id })
+      .populate("items.book")
+      .session(session);
 
-      const order = new Order({
-        user: req.user._id,
-        shippingDetails,
-        items: cart.items,
-        totalAmount
-      });
+    if (!cart || cart.items.length === 0)
+      return res.status(400).json({ message: "Cart is empty" });
 
-      await order.save();
-      io.emit("newOrder", order); // Fixed: was savedOrder
-
-      await Cart.deleteOne({ user: req.user._id });
-
-      res.json({ message: "Order placed successfully", order });
-    } catch (err) {
-      res.status(500).json({ message: err.message });
+    // 🔴 STEP 1: STOCK VALIDATION
+    for (const item of cart.items) {
+      if (item.book.stock < item.quantity) {
+        throw new Error(
+          `${item.book.title} has only ${item.book.stock} left`
+        );
+      }
     }
-  };
+
+    // 🔴 STEP 2: DECREASE STOCK
+    for (const item of cart.items) {
+      await Book.updateOne(
+        { _id: item.book._id },
+        { $inc: { stock: -item.quantity } },
+        { session }
+      );
+    }
+
+    // 🔴 STEP 3: CREATE ORDER
+    const order = await Order.create(
+      [
+        {
+          user: req.user._id,
+          shippingDetails,
+          items: cart.items.map((i) => ({
+            book: i.book._id,
+            quantity: i.quantity,
+          })),
+          totalAmount: cart.items.reduce(
+            (sum, item) => sum + item.book.price * item.quantity,
+            0
+          ),
+        },
+      ],
+      { session }
+    );
+
+    // 🔴 STEP 4: CLEAR CART
+    await Cart.deleteOne({ user: req.user._id }).session(session);
+
+    // 🔴 STEP 5: COMMIT
+    await session.commitTransaction();
+    session.endSession();
+
+    // 🔴 Real-time admin notification
+    io.emit("newOrder", order[0]);
+
+    res.status(201).json({
+      message: "Order placed successfully",
+      order: order[0],
+    });
+
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+
+    res.status(400).json({
+      message: err.message || "Order placement failed",
+    });
+  }
+};
+
 
 
   // Get user orders
