@@ -114,33 +114,65 @@ const placeOrder = async (req, res) => {
 
   //delete order
 const deleteOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: "Order not found" });
+    const order = await Order.findById(req.params.id)
+      .populate("items.book")
+      .session(session);
 
-    const userRole = req.user.role; 
-    const userId = req.user._id.toString(); 
+    if (!order)
+      return res.status(404).json({ message: "Order not found" });
 
+    const userRole = req.user.role;
+    const userId = req.user._id.toString();
+
+    // 🔐 Customer permission check
     if (userRole === "customer") {
-      if (order.user.toString() !== userId) {
-        return res.status(403).json({ message: "Unauthorized: Not your order" });
-      }
+      if (order.user.toString() !== userId)
+        return res.status(403).json({ message: "Unauthorized" });
 
-      const hoursDiff = (new Date() - new Date(order.createdAt)) / (1000 * 60 * 60);
-      if (hoursDiff > 24) {
+      const hoursDiff =
+        (new Date() - new Date(order.createdAt)) / (1000 * 60 * 60);
+
+      if (hoursDiff > 24)
         return res.status(403).json({
-          message: "You cannot delete this order. 24 hours have passed.",
+          message: "You cannot delete this order after 24 hours",
         });
+    }
+
+    // 🔴 RESTORE STOCK (ONLY IF NOT DELIVERED)
+    if (order.status !== "delivered") {
+      for (const item of order.items) {
+        await Book.updateOne(
+          { _id: item.book._id },
+          { $inc: { stock: item.quantity } },
+          { session }
+        );
       }
     }
 
-    // Admin can delete anytime
-    await Order.findByIdAndDelete(req.params.id);
-    res.json({ message: "Order deleted successfully" });
+    // 🔴 DELETE ORDER
+    await Order.findByIdAndDelete(req.params.id).session(session);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({
+      message:
+        order.status === "delivered"
+          ? "Order deleted (stock unchanged)"
+          : "Order deleted and stock restored",
+    });
+
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
