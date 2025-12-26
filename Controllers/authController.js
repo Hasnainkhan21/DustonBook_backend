@@ -1,5 +1,7 @@
 const User = require("../Models/userModel");
 const jwt = require("jsonwebtoken");
+const { welcomeEmail } = require('../tempelates/welcomeEmail');
+const { sendEmail } = require('../Services/emailService');
 
 // Register a new user
 exports.register = async (req, res) => {
@@ -17,6 +19,18 @@ exports.register = async (req, res) => {
     }
 
     const newUser = await User.create({ name, email, password, role: req.body.role });
+
+    // send welcome email (log but don't block registration)
+    try {
+      await sendEmail({
+        to: newUser.email,
+        subject: 'Welcome to Dust on Book',
+        html: welcomeEmail(newUser.name),
+      });
+    } catch (emailErr) {
+      console.error('Welcome email error:', emailErr);
+    }
+
     res.status(201).json({ message: "User registered successfully", user: newUser });
   } catch (error) {
   console.error("Register error:", error);
