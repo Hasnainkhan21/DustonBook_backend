@@ -3,6 +3,11 @@ const Cart = require("../Models/cartModel");
 const Order = require("../Models/orderModel");
 const Book = require('../Models/bookModel');
 
+const { sendEmail } = require("../Services/emailService");
+const { orderPlacedEmail } = require("../tempelates/orderPlaced");
+const { orderStatusEmail } = require("../tempelates/orderStatus");
+const User = require("../Models/userModel");
+
 const placeOrder = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -67,6 +72,40 @@ const placeOrder = async (req, res) => {
     // 🔴 Real-time admin notification
     io.emit("newOrder", order[0]);
 
+    // Populate the freshly created order so templates can access book titles and user info
+    let fullOrder;
+    try {
+      fullOrder = await Order.findById(order[0]._id).populate("items.book").populate("user", "name email");
+    } catch (fetchErr) {
+      console.error("Failed to fetch full order for email:", fetchErr);
+      fullOrder = order[0];
+    }
+
+    // 🔔 Send confirmation email to customer (non-blocking)
+    try {
+      const html = orderPlacedEmail(fullOrder);
+      sendEmail({ to: req.user.email, subject: `Order #${order[0]._id} placed`, html });
+    } catch (emailErr) {
+      console.error("Failed to send order email:", emailErr);
+    }
+
+    // 🔔 Notify all admins about the new order (non-blocking)
+    try {
+      const admins = await User.find({ role: "admin" }).select("email");
+      if (admins && admins.length) {
+        for (const admin of admins) {
+          try {
+            const adminHtml = `<h3>New Order Placed</h3><p>Order <b>#${order[0]._id}</b> placed by <b>${req.user.email}</b>.</p>` + orderPlacedEmail(fullOrder);
+            sendEmail({ to: admin.email, subject: `New Order #${order[0]._id} placed`, html: adminHtml });
+          } catch (adminEmailErr) {
+            console.error("Failed to send admin email to", admin.email, adminEmailErr);
+          }
+        }
+      }
+    } catch (adminFetchErr) {
+      console.error("Failed to fetch admin users for notification:", adminFetchErr);
+    }
+
     res.status(201).json({
       message: "Order placed successfully",
       order: order[0],
@@ -107,6 +146,16 @@ const placeOrder = async (req, res) => {
 
     // 🔥 Emit event for real-time update
     io.emit("orderStatusUpdated", order);
+
+    // 🔔 Notify customer about status change (non-blocking)
+    if (order && order.user && order.user.email) {
+      try {
+        const html = orderStatusEmail(order);
+        sendEmail({ to: order.user.email, subject: `Order #${order._id} status updated`, html });
+      } catch (emailErr) {
+        console.error("Failed to send status email:", emailErr);
+      }
+    }
 
     res.json(order);
   };
