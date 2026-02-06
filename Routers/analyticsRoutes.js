@@ -4,6 +4,6 @@ const protect = require("../middlewares/authMiddleware");
 const authorize = require("../middlewares/authorize");
 const {getAnalytics} = require("../Controllers/analyticsController");
 
-router.get("/", protect, getAnalytics);
+router.get("/analytics", protect, getAnalytics);
 
 module.exports = router;

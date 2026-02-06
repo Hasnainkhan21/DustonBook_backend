@@ -5,6 +5,7 @@ const orderStatusEmail = (order) => {
     <p><b>New Status:</b> ${order.status}</p>
 
     <p>If you have questions, contact support.</p>
+  
   `;
 };
 

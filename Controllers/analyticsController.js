@@ -6,17 +6,17 @@ const BlogPost = require("../Models/blogModel");
 exports.getAnalytics = async (req, res) => {
   try {
     // Total counts
-    const totalUsers = await User.countDocuments();
+    const totalUsers = await User.countDocuments({role: "customer"});
     const totalBooks = await Book.countDocuments();
-    const totalOrders = await Order.countDocuments();
+    const totalOrders = await Order.countDocuments({ status: "pending" });
     const blogs = await BlogPost.countDocuments();
 
     // Total revenue
     const totalRevenueData = await Order.aggregate([
-      { $match: { status: "completed" } },
+      { $match: { status: "delivered" } },
       { $group: { _id: null, totalRevenue: { $sum: "$totalAmount" } } },
     ]);
-    const totalRevenue = totalRevenueData[0]?.totalRevenue || 0;
+    const totalRevenue = totalRevenueData[0]?.totalRevenue || 10;
 
     // Most sold books (top 5)
     const topBooks = await Order.aggregate([
@@ -28,7 +28,7 @@ exports.getAnalytics = async (req, res) => {
         },
       },
       { $sort: { totalSold: -1 } },
-      { $limit: 5 },
+      { $limit: 3 },
       {
         $lookup: {
           from: "books",
