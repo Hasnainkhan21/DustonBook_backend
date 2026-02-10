@@ -11,12 +11,11 @@ exports.getAnalytics = async (req, res) => {
     const totalOrders = await Order.countDocuments({ status: "pending" });
     const blogs = await BlogPost.countDocuments();
 
-    // Total revenue
-    const totalRevenueData = await Order.aggregate([
-      { $match: { status: "delivered" } },
-      { $group: { _id: null, totalRevenue: { $sum: "$totalAmount" } } },
-    ]);
-    const totalRevenue = totalRevenueData[0]?.totalRevenue || 10;
+    // Admins: count and list (name and email)
+    const admins = await User.find({ role: "admin" }).select("name email -_id").lean();
+    const totalAdmins = admins.length;
+
+    // (total revenue removed)
 
     // Most sold books (top 5)
     const topBooks = await Order.aggregate([
@@ -51,7 +50,8 @@ exports.getAnalytics = async (req, res) => {
       totalUsers,
       totalBooks,
       totalOrders,
-      totalRevenue,
+      totalAdmins,
+      admins,
       topBooks,
       blogs,
     });
