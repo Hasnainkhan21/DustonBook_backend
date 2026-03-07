@@ -15,8 +15,6 @@ exports.getAnalytics = async (req, res) => {
     const admins = await User.find({ role: "admin" }).select("name email -_id").lean();
     const totalAdmins = admins.length;
 
-    // (total revenue removed)
-
     // Most sold books (top 5)
     const topBooks = await Order.aggregate([
       { $unwind: "$items" },

@@ -5,7 +5,7 @@ const { addBook, getBooks, getBookById, updateBook, deleteBook } = require("../C
 const  protect  = require("../middlewares/authMiddleware");
 
 router.post("/add", protect,upload.single("coverImage"), addBook);
-router.get("/get", getBooks);
+router.get("/get", getBooks);  // Get all books
 router.get("/get/:id", getBookById);
 router.put("/update/:id",upload.single("coverImage"), updateBook);
 router.delete("/delete/:id",deleteBook);
