@@ -8,7 +8,7 @@ exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    
+
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Please enter all fields" });
     }
@@ -18,7 +18,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const newUser = await User.create({ name, email, password, role: req.body.role });
+    const newUser = await User.create({ name, email, password });
 
     // send welcome email (log but don't block registration)
     try {
@@ -33,15 +33,15 @@ exports.register = async (req, res) => {
 
     res.status(201).json({ message: "User registered successfully", user: newUser });
   } catch (error) {
-  console.error("Register error:", error);
-  if (error.name === "ValidationError") {
-    const messages = Object.values(error.errors).map((val) => val.message);
-    return res.status(400).json({ errors: messages });
+    console.error("Register error:", error);
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((val) => val.message);
+      return res.status(400).json({ message: messages[0] });
+    }
+    res.status(500).json({ message: error.message });
   }
-  res.status(500).json({ message: error.message });
 }
-}
-
+ 
 
 // Login User
 exports.login = async (req, res) => {
@@ -106,6 +106,6 @@ exports.getMe = async (req, res) => {
 };
 
 exports.logout = (req, res) => {
-    res.clearCookie('token', { httpOnly: true });
-    res.json({ message: 'Logged out successfully' });
+  res.clearCookie('token', { httpOnly: true });
+  res.json({ message: 'Logged out successfully' });
 };
