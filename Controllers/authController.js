@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const { welcomeEmail } = require('../tempelates/welcomeEmail');
 const { sendEmail } = require('../Services/emailService');
 
-// Register a new user
+// Register 
 exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -20,7 +20,7 @@ exports.register = async (req, res) => {
 
     const newUser = await User.create({ name, email, password });
 
-    // send welcome email (log but don't block registration)
+    // send welcome email 
     try {
       await sendEmail({
         to: newUser.email,
