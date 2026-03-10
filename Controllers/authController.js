@@ -20,7 +20,7 @@ exports.register = async (req, res) => {
 
     const newUser = await User.create({ name, email, password });
 
-    // send welcome email 
+    // send welcome email (non-blocking)
     try {
       await sendEmail({
         to: newUser.email,
@@ -43,7 +43,7 @@ exports.register = async (req, res) => {
 }
  
 
-// Login User
+// Login registered User 
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
