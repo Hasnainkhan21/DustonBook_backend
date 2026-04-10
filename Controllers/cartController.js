@@ -1,60 +1,97 @@
-  const Cart = require("../Models/cartModel");
+const Cart = require("../Models/cartModel");
+const asyncHandler = require("../utils/asyncHandler");
 
-// Get user's cart
-const getCart = async (req, res) => {
+// @desc    Get user's cart
+// @route   GET /api/cart
+// @access  Private
+exports.getCart = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne({ user: req.user._id }).populate("items.book");
-  if (!cart) return res.status(404).json({ message: "Cart not found" });
+  if (!cart) {
+    res.status(404);
+    throw new Error("Cart not found");
+  }
   res.json(cart);
-};
+});
 
-// Add item to cart
-const addToCart = async (req, res) => {
-  const bookId = req.body.bookId;
-  const quantity = Number(req.body.quantity) || 1; // DEFAULT HERE
+// @desc    Add item to cart
+// @route   POST /api/cart/add
+// @access  Private
+exports.addToCart = asyncHandler(async (req, res) => {
+  const { bookId, quantity } = req.body;
+
+  if (!bookId) {
+    res.status(400);
+    throw new Error("Book ID is required");
+  }
+
+  const qty = Number(quantity) || 1;
 
   let cart = await Cart.findOne({ user: req.user._id });
-  if (!cart) cart = new Cart({ user: req.user._id, items: [] });
+  if (!cart) {
+    cart = new Cart({ user: req.user._id, items: [] });
+  }
 
-  await cart.addItem(bookId, quantity);
+  await cart.addItem(bookId, qty);
 
   res.status(200).json({ message: "Item added to cart", cart });
-};
+});
 
-
-// Remove item
-const removeFromCart = async (req, res) => {
+// @desc    Remove item from cart
+// @route   DELETE /api/cart/remove/:bookId
+// @access  Private
+exports.removeFromCart = asyncHandler(async (req, res) => {
   const { bookId } = req.params;
 
   const cart = await Cart.findOne({ user: req.user._id });
-  if (!cart) return res.status(404).json({ message: "Cart not found" });
+  if (!cart) {
+    res.status(404);
+    throw new Error("Cart not found");
+  }
 
   await cart.removeItem(bookId);
   res.json({ message: "Item removed", cart });
-};
+});
 
-// Clear cart
-const clearCart = async (req, res) => {
+// @desc    Clear cart
+// @route   DELETE /api/cart/clear
+// @access  Private
+exports.clearCart = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne({ user: req.user._id });
-  if (!cart) return res.status(404).json({ message: "Cart not found" });
+  if (!cart) {
+    res.status(404);
+    throw new Error("Cart not found");
+  }
 
   await cart.clearCart();
   res.json({ message: "Cart cleared" });
-};
+});
 
-//update cart item quantity
-const updateQuantity = async (req, res) => {
+// @desc    Update cart item quantity
+// @route   PUT /api/cart/update/:bookId
+// @access  Private
+exports.updateQuantity = asyncHandler(async (req, res) => {
   const { quantity } = req.body;
+  const { bookId } = req.params;
+
+  if (quantity === undefined || Number(quantity) < 1) {
+    res.status(400);
+    throw new Error("Valid quantity is required");
+  }
 
   const cart = await Cart.findOne({ user: req.user._id });
-  if (!cart) return res.status(404).json({ message: "Cart not found" });
+  if (!cart) {
+    res.status(404);
+    throw new Error("Cart not found");
+  }
 
-  const item = cart.items.find(i => i.book.toString() === req.params.bookId);
-  if (!item) return res.status(404).json({ message: "Item not found" });
+  const item = cart.items.find(i => i.book.toString() === bookId);
+  if (!item) {
+    res.status(404);
+    throw new Error("Item not found in cart");
+  }
 
-  item.quantity = quantity;
+  item.quantity = Number(quantity);
   await cart.save();
 
   res.json({ message: "Quantity updated", cart });
-};
-
-module.exports = { getCart, addToCart, removeFromCart, clearCart, updateQuantity };
+});

@@ -5,11 +5,12 @@ const protect = require("../middlewares/authMiddleware");
 const upload = require("../middlewares/multer");
 const authorize = require("../middlewares/authorize");
 
-
-router.post("/add", protect, upload.single("image"), createPost); // later: add admin middleware
 router.get("/all", getAllPosts);
-router.put("/like/:id",likePost);
-router.delete("/delete/:id", protect, deletePost);  //authorize("admin"),
-router.put("/update/:id", protect, updatePost);
+router.put("/like/:id", protect, likePost); // Users must be logged in to like
+
+// Admin only routes
+router.post("/add", protect, authorize("admin"), upload.single("image"), createPost);
+router.put("/update/:id", protect, authorize("admin"), updatePost);
+router.delete("/delete/:id", protect, authorize("admin"), deletePost);
 
 module.exports = router;

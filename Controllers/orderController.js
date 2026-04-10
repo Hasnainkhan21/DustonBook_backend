@@ -2,35 +2,40 @@ const mongoose = require("mongoose");
 const Cart = require("../Models/cartModel");
 const Order = require("../Models/orderModel");
 const Book = require('../Models/bookModel');
-
+const User = require("../Models/userModel");
+const asyncHandler = require("../utils/asyncHandler");
 const { sendEmail } = require("../Services/emailService");
 const { orderPlacedEmail } = require("../tempelates/orderPlaced");
 const { orderStatusEmail } = require("../tempelates/orderStatus");
-const User = require("../Models/userModel");
 
-const placeOrder = async (req, res) => {
+// @desc    Place a new order
+// @route   POST /api/orders/place
+// @access  Private
+exports.placeOrder = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const { shippingDetails } = req.body;
 
-    if (!shippingDetails)
-      return res.status(400).json({ message: "Shipping details are required" });
+    if (!shippingDetails) {
+      res.status(400);
+      throw new Error("Shipping details are required");
+    }
 
     const cart = await Cart.findOne({ user: req.user._id })
       .populate("items.book")
       .session(session);
 
-    if (!cart || cart.items.length === 0)
-      return res.status(400).json({ message: "Cart is empty" });
+    if (!cart || cart.items.length === 0) {
+      res.status(400);
+      throw new Error("Cart is empty");
+    }
 
     // 🔴 STEP 1: STOCK VALIDATION
     for (const item of cart.items) {
       if (item.book.stock < item.quantity) {
-        throw new Error(
-          `${item.book.title} has only ${item.book.stock} left`
-        );
+        throw new Error(`${item.book.title} has only ${item.book.stock} left`);
       }
     }
 
@@ -44,19 +49,23 @@ const placeOrder = async (req, res) => {
     }
 
     // 🔴 STEP 3: CREATE ORDER
-    const order = await Order.create(
+    const orderItems = cart.items.map((i) => ({
+      book: i.book._id,
+      quantity: i.quantity,
+    }));
+
+    const totalAmount = cart.items.reduce(
+      (sum, item) => sum + item.book.price * item.quantity,
+      0
+    );
+
+    const [order] = await Order.create(
       [
         {
           user: req.user._id,
           shippingDetails,
-          items: cart.items.map((i) => ({
-            book: i.book._id,
-            quantity: i.quantity,
-          })),
-          totalAmount: cart.items.reduce(
-            (sum, item) => sum + item.book.price * item.quantity,
-            0
-          ),
+          items: orderItems,
+          totalAmount,
         },
       ],
       { session }
@@ -70,99 +79,101 @@ const placeOrder = async (req, res) => {
     session.endSession();
 
     // 🔴 Real-time admin notification
-    io.emit("newOrder", order[0]);
-
-    // Populate the freshly created order so templates can access book titles and user info
-    let fullOrder;
-    try {
-      fullOrder = await Order.findById(order[0]._id).populate("items.book").populate("user", "name email");
-    } catch (fetchErr) {
-      console.error("Failed to fetch full order for email:", fetchErr);
-      fullOrder = order[0];
+    if (global.io) {
+      global.io.emit("newOrder", order);
     }
 
-    // 🔔 Send confirmation email to customer (non-blocking)
-    try {
-      const html = orderPlacedEmail(fullOrder);
-      sendEmail({ to: req.user.email, subject: `Order #${order[0]._id} placed`, html });
-    } catch (emailErr) {
-      console.error("Failed to send order email:", emailErr);
-    }
+    // 🔔 Notify (non-blocking)
+    process.nextTick(async () => {
+      try {
+        const fullOrder = await Order.findById(order._id)
+          .populate("items.book")
+          .populate("user", "name email");
 
-    // 🔔 Notify all admins about the new order (non-blocking)
-    try {
-      const admins = await User.find({ role: "admin" }).select("email");
-      if (admins && admins.length) {
+        const html = orderPlacedEmail(fullOrder);
+        await sendEmail({ to: req.user.email, subject: `Order #${order._id.toString().slice(-6)} placed`, html });
+
+        const admins = await User.find({ role: "admin" }).select("email");
         for (const admin of admins) {
-          try {
-            const adminHtml = `<h3>New Order Placed</h3><p>Order <b>#${order[0]._id}</b> placed by <b>${req.user.email}</b>.</p>` + orderPlacedEmail(fullOrder);
-            sendEmail({ to: admin.email, subject: `New Order #${order[0]._id} placed`, html: adminHtml });
-          } catch (adminEmailErr) {
-            console.error("Failed to send admin email to", admin.email, adminEmailErr);
-          }
+          const adminHtml = `<h3>New Order Placed</h3><p>Order <b>#${order._id}</b> placed by <b>${req.user.email}</b>.</p>` + html;
+          await sendEmail({ to: admin.email, subject: `New Order #${order._id.toString().slice(-6)}`, html: adminHtml });
         }
+      } catch (err) {
+        console.error("Order notification error:", err);
       }
-    } catch (adminFetchErr) {
-      console.error("Failed to fetch admin users for notification:", adminFetchErr);
-    }
+    });
 
     res.status(201).json({
       message: "Order placed successfully",
-      order: order[0],
+      order,
     });
 
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
-
-    res.status(400).json({
-      message: err.message || "Order placement failed",
-    });
+    throw err;
   }
-};
+});
 
+// @desc    Get user orders
+// @route   GET /api/orders/my
+// @access  Private
+exports.getUserOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find({ user: req.user._id }).populate("items.book").sort({ createdAt: -1 });
+  res.json(orders);
+});
 
+// @desc    Admin: get all orders
+// @route   GET /api/orders/all
+// @access  Private/Admin
+exports.getAllOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find()
+    .populate("user", "name email")
+    .populate("items.book")
+    .sort({ createdAt: -1 });
+  res.json(orders);
+});
 
-  // Get user orders
-  const getUserOrders = async (req, res) => {
-    const orders = await Order.find({ user: req.user._id }).populate("items.book");
-    res.json(orders);
-  };
+// @desc    Admin: update order status
+// @route   PUT /api/orders/update/:id
+// @access  Private/Admin
+exports.updateOrderStatus = asyncHandler(async (req, res) => {
+  const { status } = req.body;
+  const order = await Order.findByIdAndUpdate(
+    req.params.id,
+    { status },
+    { new: true }
+  ).populate("items.book user");
 
-  // Admin: get all orders
-  const getAllOrders = async (req, res) => {
-    const orders = await Order.find().populate("user", "name email").populate("items.book");
-    res.json(orders);
-  };
+  if (!order) {
+    res.status(404);
+    throw new Error("Order not found");
+  }
 
-  // Admin: update order status
-  const updateOrderStatus = async (req, res) => {
-    const { status } = req.body;
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).populate("items.book user");
+  // 🔥 Emit event for real-time update
+  if (global.io) {
+    global.io.emit("orderStatusUpdated", order);
+  }
 
-    // 🔥 Emit event for real-time update
-    io.emit("orderStatusUpdated", order);
-
-    // 🔔 Notify customer about status change (non-blocking)
-    if (order && order.user && order.user.email) {
+  // 🔔 Notify customer about status change
+  if (order.user?.email) {
+    process.nextTick(async () => {
       try {
         const html = orderStatusEmail(order);
-        sendEmail({ to: order.user.email, subject: `Order #${order._id} status updated`, html });
-      } catch (emailErr) {
-        console.error("Failed to send status email:", emailErr);
+        await sendEmail({ to: order.user.email, subject: `Order status updated: ${status}`, html });
+      } catch (err) {
+        console.error("Status notification error:", err);
       }
-    }
+    });
+  }
 
-    res.json(order);
-  };
+  res.json(order);
+});
 
-
-  //delete order
-const deleteOrder = async (req, res) => {
+// @desc    Delete order
+// @route   DELETE /api/orders/delete/:id
+// @access  Private
+exports.deleteOrder = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -171,67 +182,55 @@ const deleteOrder = async (req, res) => {
       .populate("items.book")
       .session(session);
 
-    if (!order)
-      return res.status(404).json({ message: "Order not found" });
-
-    const userRole = req.user.role;
-    const userId = req.user._id.toString();
-
-    // 🔐 Customer permission check
-    if (userRole === "customer") {
-      if (order.user.toString() !== userId)
-        return res.status(403).json({ message: "Unauthorized" });
-
-      const hoursDiff =
-        (new Date() - new Date(order.createdAt)) / (1000 * 60 * 60);
-
-      if (hoursDiff > 24)
-        return res.status(403).json({
-          message: "You cannot delete this order after 24 hours",
-        });
+    if (!order) {
+      res.status(404);
+      throw new Error("Order not found");
     }
 
-    // 🔴 RESTORE STOCK (ONLY IF NOT DELIVERED)
-    if (order.status !== "delivered") {
-      for (const item of order.items) {
-        await Book.updateOne(
-          { _id: item.book._id },
-          { $inc: { stock: item.quantity } },
-          { session }
-        );
+    const isOwner = order.user.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
+      res.status(403);
+      throw new Error("Not authorized to delete this order");
+    }
+
+    // Owner can only cancel within 24 hours if pending
+    if (isOwner && !isAdmin) {
+      const hoursDiff = (new Date() - new Date(order.createdAt)) / (1000 * 60 * 60);
+      if (hoursDiff > 24) {
+        res.status(403);
+        throw new Error("Orders cannot be cancelled after 24 hours");
+      }
+      if (order.status !== "Pending") {
+        res.status(400);
+        throw new Error("Only pending orders can be cancelled");
       }
     }
 
-    // 🔴 DELETE ORDER
+    // RESTORE STOCK (ONLY IF NOT DELIVERED)
+    if (order.status !== "delivered") {
+      for (const item of order.items) {
+        if (item.book) {
+          await Book.updateOne(
+            { _id: item.book._id },
+            { $inc: { stock: item.quantity } },
+            { session }
+          );
+        }
+      }
+    }
+
     await Order.findByIdAndDelete(req.params.id).session(session);
 
     await session.commitTransaction();
     session.endSession();
 
-    res.json({
-      message:
-        order.status === "delivered"
-          ? "Order deleted (stock unchanged)"
-          : "Order deleted and stock restored",
-    });
+    res.json({ message: "Order deleted successfully" });
 
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
-    res.status(500).json({ message: err.message });
+    throw err;
   }
-};
-
-
-
-
-  //delete all orders - for testing purposes
-  const deleteAllOrders = async (req, res) => {
-    try{
-      await Order.deleteMany({});
-      res.json({ message: "All orders deleted successfully" });
-    }catch(err){
-      res.status(500).json({ message: err.message });
-    }
-  }
-  module.exports = { placeOrder, getUserOrders, getAllOrders, updateOrderStatus, deleteOrder, deleteAllOrders };
+});
